@@ -39,25 +39,21 @@ function processUserCalendar(userEmail, companyDomains) {
         ) {
           if (shouldCancelEvent(event, companyDomains)) {
             if (scenario.includes("Recurring")) {
-              updateRecurringEvent(event, userEmail, scenario);
+              const eventStartDate = new Date(event.start.dateTime || event.start.date);
+
+              if (eventStartDate >= fromDate) {
+                removeEvent(event, userEmail, scenario);
+              } else {
+                updateRecurringEvent(event, userEmail, scenario);
+              }
             } else {
-              removeOneTimeEvent(event, userEmail, scenario);
+              removeEvent(event, userEmail, scenario);
             }
           } else {
-            console.log(`Preserving event: ${event.summary}, Scenario: ${scenario}
-              Summary: ${event.summary}
-              Start: ${event.start?.dateTime || event.start?.date}
-              End: ${event.end?.dateTime || event.end?.date}
-              Author/Creator: ${event.organizer?.email || event.creator?.email}
-              Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}`);
+            logEventDetails(`Preserving event`, event, scenario);
           }
         } else {
-          console.log(`Preserving event: ${event.summary}, Scenario: ${scenario}
-            Summary: ${event.summary}
-            Start: ${event.start?.dateTime || event.start?.date}
-            End: ${event.end?.dateTime || event.end?.date}
-            Author/Creator: ${event.organizer?.email || event.creator?.email}
-            Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}`);
+          logEventDetails(`Preserving event`, event, scenario);
         }
       });
   } catch (error) {
@@ -161,12 +157,7 @@ function shouldCancelEvent(event, companyDomains) {
     exemptedUsers.includes(attendee.email)
   );
 
-  if (hasExemptedAttendee && preserveEventsWithExemptedAttendees) {
-    return false;
-  }
-
-  // Otherwise, remove (cancel) the event
-  return true;
+  return !(hasExemptedAttendee && preserveEventsWithExemptedAttendees);
 }
 
 function updateRecurringEvent(event, userEmail, scenario) {
@@ -183,13 +174,9 @@ function updateRecurringEvent(event, userEmail, scenario) {
       return rule;
     });
 
-    console.log(`Recurring event is to be updated: ${event.summary}, Scenario: ${scenario}
-      Start Date: ${event.start?.dateTime || event.start?.date}
-      End Date: ${event.end?.dateTime || event.end?.date}
-      Author/Creator: ${event.organizer?.email || event.creator?.email}
-      Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}
-      Old Recurrence: ${event.recurrence}
-      New Recurrence: ${updatedRecurrence}`);
+    logEventDetails(`Recurring event to be updated`, event, scenario,
+      `Old Recurrence: ${event.recurrence}
+    New Recurrence: ${updatedRecurrence}`);
 
     if (!testRun) {
       const updatedEvent = {
@@ -205,18 +192,25 @@ function updateRecurringEvent(event, userEmail, scenario) {
   }
 }
 
-function removeOneTimeEvent(event, userEmail, scenario) {
+function removeEvent(event, userEmail, scenario) {
   try {
-    console.log(`One-time event is to be removed: ${event.summary}, Scenario: ${scenario}
-      Start Date: ${event.start?.dateTime || event.start?.date}
-      End Date: ${event.end?.dateTime || event.end?.date}
-      Author/Creator: ${event.organizer?.email || event.creator?.email}
-      Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}`);
+    logEventDetails(`${scenario} event to be removed`, event, scenario);
+
     if (!testRun) {
       Calendar.Events.remove(userEmail, event.id);
-      console.log(`Removed one-time event: ${event.summary}, Scenario: ${scenario}`);
+      console.log(`Removed ${scenario} event: ${event.summary}, Scenario: ${scenario}`);
     }
   } catch (error) {
-    console.error(`Failed to remove one-time event: ${error.message}`);
+    console.error(`Failed to remove ${scenario} event: ${error.message}`);
   }
+}
+
+function logEventDetails(prefix, event, scenario, postfix = '') {
+  console.log(`${prefix}: ${event.summary}, Scenario: ${scenario}
+    Summary: ${event.summary}
+    Start: ${event.start?.dateTime || event.start?.date}
+    End: ${event.end?.dateTime || event.end?.date}
+    Author/Creator: ${event.organizer?.email || event.creator?.email}
+    Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}
+    ${postfix}`);
 }
