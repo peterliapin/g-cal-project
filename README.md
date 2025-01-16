@@ -8,7 +8,6 @@ This guide provides a step-by-step process to set up your development environmen
 
 The primary objective of this project is to implement a script that clears internal calendar events for the organization’s users, starting from specified date. By removing recurring and internal meetings scheduled after this date, the company aims to:
 
-- Streamline scheduling practices.
 - Reduce unnecessary meeting room usage.
 - Encourage employees to reassess the necessity of their meetings.
 
