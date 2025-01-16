@@ -2,8 +2,6 @@
 
 This guide provides a step-by-step process to set up your development environment, configure the required APIs, and execute the script to efficiently clear and manage your organization’s internal Google Calendar events.
 
----
-
 ## Overview and Premises
 
 ### Project Goals and Scope
@@ -15,8 +13,6 @@ The primary objective of this project is to implement a script that clears inter
 - Encourage employees to reassess the necessity of their meetings.
 
 The script is designed to support relatively big number of user and to minimize disruption to external meetings or exempted users/teams.
-
----
 
 ### Constraints and Requirements
 
@@ -60,8 +56,6 @@ To run this script, you need the following:
    - Add the following OAuth scopes to your project:
      - `https://www.googleapis.com/auth/admin.directory.user.readonly`
      - `https://www.googleapis.com/auth/calendar`
-
----
 
 ### Steps to Run the Script
 
