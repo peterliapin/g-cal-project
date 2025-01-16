@@ -73,7 +73,9 @@ function getAllUsers() {
 }
 
 function extractUniqueDomains(users) {
-  return [...new Set(users.map(email => email.split('@')[1].toLowerCase()))];
+  let userDomains = [...new Set(users.map(email => email.split('@')[1].toLowerCase()))];
+  userDomains.push("resource.calendar.google.com");
+  return userDomains;
 }
 
 function fetchCalendarEvents(userEmail) {
