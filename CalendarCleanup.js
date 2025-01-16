@@ -1,39 +1,47 @@
 const fromDate = new Date(2025, 1, 3); // February 3, 2025
 const exemptedUsers = []; // Add emails for exempted users
 const testRun = true; // Set to true for testing without applying changes
-const preserveEventsWithExemptedAttendees = true; // Controls whether to preserve or remove events that include at least one user from exemptedUsers.
+const preserveEventsWithExemptedAttendees = true; // Preserve events with exempted attendees if true
 
 function readAndCancelEvents() {
   const users = getAllUsers();
+  const companyDomains = extractUniqueDomains(users);
 
-  const domains = extractUniqueDomains(users);
-  console.log(`Company domains: ${domains.join(', ')}`);
+  console.log(`Company domains: ${companyDomains.join(', ')}`);
   console.log(`Processing ${users.length} users.`);
 
-  users.forEach(userEmail => {
-    if (exemptedUsers.includes(userEmail)) {
-      console.log(`Skipping exempted user: ${userEmail}`);
-      return;
-    }
+  users.forEach(userEmail => processUserCalendar(userEmail, companyDomains));
+}
 
-    console.info(`Processing calendar for: ${userEmail}`);
-    try {
-      const events = fetchCalendarEvents(userEmail);
+function processUserCalendar(userEmail, companyDomains) {
+  if (exemptedUsers.includes(userEmail)) {
+    console.log(`Skipping exempted user: ${userEmail}`);
+    return;
+  }
 
-      console.log(`Found ${events.length} events in ${userEmail}'s calendar.`);
+  console.info(`Processing calendar for: ${userEmail}`);
+  try {
+    const events = fetchCalendarEvents(userEmail);
+    console.log(`Found ${events.length} events in ${userEmail}'s calendar.`);
 
-      // Filter out recurring "child" instances (we only want to modify the "master" events)
-      const masterEvents = events.filter(event => !event.recurringEventId);
+    events
+      .filter(event => !event.recurringEventId) // Process only master events
+      .forEach(event => {
+        const scenario = classifyEvent(event, companyDomains);
 
-      masterEvents.forEach(event => {
-        const scenario = classifyEvent(event, domains);
-
-        if (scenario === "Internal/Recurring" || scenario === "Internal/One-Time" || scenario.startsWith("Exempted")) {
-          if (shouldCancelEvent(event, domains, preserveEventsWithExemptedAttendees)) {            
-            if (scenario === "Internal/Recurring") {
-              updateRecurringEvent(event, userEmail, testRun, scenario);
+        if (
+          scenario === "Internal/Recurring" ||
+          scenario === "Internal/One-Time" ||
+          scenario === "Exempted/AsAuthor/Recurring" ||
+          scenario === "Exempted/AsAuthor/One-Time" ||
+          scenario === "Exempted/AsAttendee/Recurring" ||
+          scenario === "Exempted/AsAttendee/One-Time"
+        ) {
+          if (shouldCancelEvent(event, companyDomains)) {
+            if (scenario.includes("Recurring")) {
+              updateRecurringEvent(event, userEmail, scenario);
             } else {
-              removeOneTimeEvent(event, userEmail, testRun, scenario);
+              removeOneTimeEvent(event, userEmail, scenario);
             }
           } else {
             console.log(`Preserving event: ${event.summary}, Scenario: ${scenario}
@@ -52,85 +60,69 @@ function readAndCancelEvents() {
             Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}`);
         }
       });
-    } catch (e) {
-      console.error(`Failed to process calendar for ${userEmail}: ${e.message}`);
-    }
-  });
+  } catch (error) {
+    console.error(`Failed to process calendar for ${userEmail}: ${error.message}`);
+  }
 }
 
 function getAllUsers() {
   const users = [];
   let pageToken;
-
   do {
-    const response = AdminDirectory.Users.list({
-      customer: 'my_customer',
-      maxResults: 500,
-      pageToken: pageToken,
-    });
-    const userList = response.users || [];
-    users.push(...userList.map(user => user.primaryEmail));
+    const response = AdminDirectory.Users.list({ customer: 'my_customer', maxResults: 500, pageToken });
+    users.push(...(response.users || []).map(user => user.primaryEmail));
     pageToken = response.nextPageToken;
   } while (pageToken);
-
   return users;
 }
 
 function extractUniqueDomains(users) {
-  const domains = [];
-  users.forEach(email => {
-    const domain = email.split('@')[1].toLowerCase(); // Ensure case insensitivity
-    if (domain && !domains.includes(domain)) {
-      domains.push(domain);
-    }
-  });
-  return domains;
+  return [...new Set(users.map(email => email.split('@')[1].toLowerCase()))];
 }
 
 function fetchCalendarEvents(userEmail) {
-  const response = Calendar.Events.list(userEmail, {
-    timeMin: fromDate.toISOString(),
-    maxResults: 10000,
-    singleEvents: false,
-  });
-  return response.items || [];
+  return (
+    Calendar.Events.list(userEmail, {
+      timeMin: fromDate.toISOString(),
+      maxResults: 10000,
+      singleEvents: false
+    }).items || []
+  );
 }
 
 /**
  * Classifies an event into a scenario:
  * - External/Recurring or External/One-Time
  * - Internal/Recurring or Internal/One-Time
- * - Exempted/AsAuthor or Exempted/AsAttendee
+ * - Exempted/AsAuthor/Recurring or Exempted/AsAuthor/One-Time
+ * - Exempted/AsAttendee/Recurring or Exempted/AsAttendee/One-Time
  * - Personal (no other attendees or only organizer as attendee)
  */
-function classifyEvent(event, domains) {
+function classifyEvent(event, companyDomains) {
   const organizerEmail = event.organizer?.email || event.creator?.email;
   const isRecurring = !!event.recurrence;
 
   // Check if there's any attendee outside our domains
   const isExternal = event.attendees?.some(attendee =>
-    !domains.some(domain => attendee.email.toLowerCase().endsWith(domain))
+    !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
 
   if (isExternal) {
     return isRecurring ? "External/Recurring" : "External/One-Time";
   }
 
-  // Check for exempted user scenarios
+  // Check for exempted user scenarios when the organizer is exempted
   if (exemptedUsers.includes(organizerEmail)) {
-    return isRecurring ? "Exempted/AsAuthor" : "Exempted/AsAuthor";
+    return isRecurring ? "Exempted/AsAuthor/Recurring" : "Exempted/AsAuthor/One-Time";
   }
 
+  // Check for exempted user scenarios when any attendee is exempted
   if (event.attendees?.some(attendee => exemptedUsers.includes(attendee.email))) {
-    return isRecurring ? "Exempted/AsAttendee" : "Exempted/AsAttendee";
+    return isRecurring ? "Exempted/AsAttendee/Recurring" : "Exempted/AsAttendee/One-Time";
   }
 
   // If no attendees (other than possibly the organizer), treat as personal
-  if (
-    !event.attendees ||
-    event.attendees.length === 0 ||
-    event.attendees.every(att => att.email === organizerEmail)
-  ) {
+  if (!event.attendees || event.attendees.every(att => att.email === organizerEmail)) {
     return "Personal";
   }
 
@@ -141,17 +133,17 @@ function classifyEvent(event, domains) {
  * Determines whether we should cancel (delete/modify) the given event,
  * applying our extra rule about exempted users in the attendee list.
  */
-function shouldCancelEvent(event, domains, preserveEventsWithExemptedAttendees) {
+function shouldCancelEvent(event, companyDomains) {
   // Basic checks for personal or external events
   const organizerEmail = event.organizer?.email || event.creator?.email;
-  
+
   const isPersonal =
     !event.attendees ||
     event.attendees.every(att => att.email === organizerEmail);
 
   // If external attendees exist, preserve
   const isExternal = event.attendees?.some(attendee =>
-    !domains.some(domain => attendee.email.toLowerCase().endsWith(domain))
+    !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
 
   if (isExternal || isPersonal) {
@@ -177,7 +169,7 @@ function shouldCancelEvent(event, domains, preserveEventsWithExemptedAttendees) 
   return true;
 }
 
-function updateRecurringEvent(event, userEmail, testRun, scenario) {
+function updateRecurringEvent(event, userEmail, scenario) {
   try {
     const updatedRecurrence = event.recurrence.map(rule => {
       if (rule.startsWith("RRULE:")) {
@@ -208,12 +200,12 @@ function updateRecurringEvent(event, userEmail, testRun, scenario) {
       Calendar.Events.update(updatedEvent, userEmail, event.id);
       console.log(`Updated recurring event to end by ${fromDate.toISOString()}: ${event.summary}, Scenario: ${scenario}`);
     }
-  } catch (e) {
-    console.error(`Failed to update recurring event: ${e.message}`);
+  } catch (error) {
+    console.error(`Failed to update recurring event: ${error.message}`);
   }
 }
 
-function removeOneTimeEvent(event, userEmail, testRun, scenario) {
+function removeOneTimeEvent(event, userEmail, scenario) {
   try {
     console.log(`One-time event is to be removed: ${event.summary}, Scenario: ${scenario}
       Start Date: ${event.start?.dateTime || event.start?.date}
@@ -224,7 +216,7 @@ function removeOneTimeEvent(event, userEmail, testRun, scenario) {
       Calendar.Events.remove(userEmail, event.id);
       console.log(`Removed one-time event: ${event.summary}, Scenario: ${scenario}`);
     }
-  } catch (e) {
-    console.error(`Failed to remove one-time event: ${e.message}`);
+  } catch (error) {
+    console.error(`Failed to remove one-time event: ${error.message}`);
   }
 }
