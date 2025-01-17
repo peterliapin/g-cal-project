@@ -25,9 +25,14 @@ function readAndCancelEvents() {
   const remainingUsers = sortedUsers.filter(email => email > lastProcessedEmail);
   console.log(`Remaining users found: ${remainingUsers.length}`);
 
+  const totalUsers = remainingUsers.length;
+  let processedCount = 0;
+
   for (const userEmail of remainingUsers) {
       processUserCalendar(userEmail, companyDomains);
       scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
+      processedCount++;
+      console.log(`Processed ${processedCount} of ${totalUsers} emails. Remaining: ${totalUsers - processedCount}`);
   }
 }
 
