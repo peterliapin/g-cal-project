@@ -2,15 +2,33 @@ const fromDate = new Date(2025, 1, 3); // February 3, 2025
 const exemptedUsers = []; // Add emails for exempted users
 const testRun = true; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = true; // Preserve events with exempted attendees if true
+const restartFromBeginning = false; // Set to true to restart from the beginning
 
 function readAndCancelEvents() {
-  const users = getAllUsers();
-  const companyDomains = extractUniqueDomains(users);
-
+  const allUsers = getAllUsers();
+  const companyDomains = extractUniqueDomains(allUsers);
   console.log(`Company domains: ${companyDomains.join(', ')}`);
-  console.log(`Processing ${users.length} users.`);
 
-  users.forEach(userEmail => processUserCalendar(userEmail, companyDomains));
+  const scriptProps = PropertiesService.getScriptProperties();
+
+  if (restartFromBeginning) {
+    scriptProps.deleteProperty('LAST_PROCESSED_EMAIL');
+    console.log('Reset requested. Deleted LAST_PROCESSED_EMAIL from PropertiesService.');
+  }
+
+  let lastProcessedEmail = scriptProps.getProperty('LAST_PROCESSED_EMAIL') || '';
+  console.log(`Resuming from last processed email = "${lastProcessedEmail}"`);
+
+  const sortedUsers = allUsers.slice().sort((a, b) => a.localeCompare(b));
+  console.log(`Total users found: ${sortedUsers.length}`);
+
+  const remainingUsers = sortedUsers.filter(email => email > lastProcessedEmail);
+  console.log(`Remaining users found: ${remainingUsers.length}`);
+
+  for (const userEmail of remainingUsers) {
+      processUserCalendar(userEmail, companyDomains);
+      scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
+  }
 }
 
 function processUserCalendar(userEmail, companyDomains) {
