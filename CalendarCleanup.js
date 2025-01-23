@@ -1,4 +1,4 @@
-const fromDate = new Date(2025, 1, 3); // February 3, 2025
+const fromDate = new Date(2025, 1, 10); // February 3, 2025
 const exemptedUsers = []; // Add emails for exempted users
 const testRun = true; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = true; // Preserve events with exempted attendees if true
