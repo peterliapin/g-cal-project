@@ -5,8 +5,8 @@ const preserveEventsWithExemptedAttendees = false; // Preserve events with exemp
 const restartFromBeginning = false; // Set to true to restart from the beginning
 
 function readAndCancelEvents() {
-  const allUsers = getAllUsers();
-  const companyDomains = extractUniqueDomains(allUsers);
+  const allCalendars = getAllCalendars(); 
+  const companyDomains = extractUniqueDomains(allCalendars);
   console.log(`Company domains: ${companyDomains.join(', ')}`);
 
   const scriptProps = PropertiesService.getScriptProperties();
@@ -19,20 +19,20 @@ function readAndCancelEvents() {
   let lastProcessedEmail = scriptProps.getProperty('LAST_PROCESSED_EMAIL') || '';
   console.log(`Resuming from last processed email = "${lastProcessedEmail}"`);
 
-  const sortedUsers = allUsers.slice().sort((a, b) => a.localeCompare(b));
-  console.log(`Total users found: ${sortedUsers.length}`);
+  const sortedCalendars = allCalendars.slice().sort((a, b) => a.localeCompare(b));
+  console.log(`Total calendars found: ${sortedCalendars.length}`);
 
-  const remainingUsers = sortedUsers.filter(email => email > lastProcessedEmail);
-  console.log(`Remaining users found: ${remainingUsers.length}`);
+  const remainingCalendars = sortedCalendars.filter(email => email > lastProcessedEmail);
+  console.log(`Remaining calendars found: ${remainingCalendars.length}`);
 
-  const totalUsers = remainingUsers.length;
+  const totalUsers = remainingCalendars.length;
   let processedCount = 0;
 
-  for (const userEmail of remainingUsers) {
-      processUserCalendar(userEmail, companyDomains);
-      scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
-      processedCount++;
-      console.log(`Processed ${processedCount} of ${totalUsers} emails. Remaining: ${totalUsers - processedCount}`);
+  for (const userEmail of remainingCalendars) {
+    processUserCalendar(userEmail, companyDomains);
+    scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
+    processedCount++;
+    console.log(`Processed ${processedCount} of ${totalUsers} calendars. Remaining: ${totalUsers - processedCount}`);
   }
 }
 
@@ -95,16 +95,34 @@ function getAllUsers() {
   return users;
 }
 
-function extractUniqueDomains(users) {
-  let userDomains = [...new Set(users.map(email => email.split('@')[1].toLowerCase()))];
-  userDomains.push("resource.calendar.google.com");
-  userDomains.push("group.calendar.google.com");  
-  return userDomains;
+function getAllCalendars() {
+  const users = getAllUsers();
+  const all = new Set(users);
+
+  // Fetch all calendars accessible to the script user
+  const cl = Calendar.CalendarList.list().items || [];
+
+  cl.forEach(c => {
+    if (c.accessRole === 'owner' || c.accessRole === 'writer') {
+      all.add(c.id);
+
+      console.log(`Found "${c.summary}" calendar with access role = "${c.accessRole}" and id = "${c.id}"`);
+    }
+  });
+
+  return [...all];
 }
 
-function fetchCalendarEvents(userEmail) {
+function extractUniqueDomains(users) {
+  let userDomains = users.map(email => email.split('@')[1].toLowerCase());
+  userDomains.push("resource.calendar.google.com");
+  userDomains.push("group.calendar.google.com");
+  return [...new Set(userDomains)];
+}
+
+function fetchCalendarEvents(calendarId) {
   return (
-    Calendar.Events.list(userEmail, {
+    Calendar.Events.list(calendarId, {
       timeMin: fromDate.toISOString(),
       maxResults: 10000,
       singleEvents: false
@@ -124,7 +142,7 @@ function classifyEvent(event, companyDomains) {
   const organizerEmail = event.organizer?.email || event.creator?.email;
   const isRecurring = !!event.recurrence;
 
-  // Check if there's any attendee outside our domains
+// Check if there's any attendee outside our domains
   const isExternal = event.attendees?.some(attendee =>
     !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
@@ -163,7 +181,7 @@ function shouldCancelEvent(event, companyDomains) {
     !event.attendees ||
     event.attendees.every(att => att.email === organizerEmail);
 
-  // If external attendees exist, preserve
+    // If external attendees exist, preserve
   const isExternal = event.attendees?.some(attendee =>
     !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
@@ -172,7 +190,7 @@ function shouldCancelEvent(event, companyDomains) {
     return false;
   }
 
-  // If the event is authored by an exempted user, always preserve
+// If the event is authored by an exempted user, always preserve
   if (exemptedUsers.includes(organizerEmail)) {
     return false;
   }
@@ -186,7 +204,7 @@ function shouldCancelEvent(event, companyDomains) {
   return !(hasExemptedAttendee && preserveEventsWithExemptedAttendees);
 }
 
-function updateRecurringEvent(event, userEmail, scenario) {
+function updateRecurringEvent(event, calendarId, scenario) {
   try {
     const updatedRecurrence = event.recurrence.map(rule => {
       if (rule.startsWith("RRULE:")) {
@@ -210,21 +228,21 @@ function updateRecurringEvent(event, userEmail, scenario) {
         recurrence: updatedRecurrence
       };
 
-      Calendar.Events.update(updatedEvent, userEmail, event.id);
-      console.log(`Updated recurring event to end by ${fromDate.toISOString()}: ${event.summary}, Scenario: ${scenario}`);
+      Calendar.Events.update(updatedEvent, calendarId, event.id);
+      console.warn(`Updated recurring event to end by ${fromDate.toISOString()}: ${event.summary}, Scenario: ${scenario}`);
     }
   } catch (error) {
     console.error(`Failed to update recurring event: ${error.message}`);
   }
 }
 
-function removeEvent(event, userEmail, scenario) {
+function removeEvent(event, calendarId, scenario) {
   try {
     logEventDetails(`${scenario} event to be removed`, event, scenario);
 
     if (!testRun) {
-      Calendar.Events.remove(userEmail, event.id);
-      console.log(`Removed ${scenario} event: ${event.summary}, Scenario: ${scenario}`);
+      Calendar.Events.remove(calendarId, event.id);
+      console.warn(`Removed ${scenario} event: ${event.summary}, Scenario: ${scenario}`);
     }
   } catch (error) {
     console.error(`Failed to remove ${scenario} event: ${error.message}`);
