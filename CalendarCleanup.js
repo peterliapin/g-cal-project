@@ -3,6 +3,7 @@ const exemptedUsers = []; // Add emails for exempted users
 const testRun = true; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
 const restartFromBeginning = false; // Set to true to restart from the beginning
+const secondaryCalendarsIds = []
 
 function readAndCancelEvents() {
   const allCalendars = getAllCalendars(); 
@@ -108,6 +109,10 @@ function getAllCalendars() {
 
       console.log(`Found "${c.summary}" calendar with access role = "${c.accessRole}" and id = "${c.id}"`);
     }
+  });
+
+  secondaryCalendarsIds.forEach(c => {
+    all.add(c);
   });
 
   return [...all];
