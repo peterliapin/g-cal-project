@@ -1,12 +1,16 @@
-const fromDate = new Date(2025, 1, 10); // February 10, 2025
+const fromDate = new Date(2025, 1, 17); // February 17, 2025
 const exemptedUsers = []; // Add emails for exempted users
 const testRun = true; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
 const restartFromBeginning = false; // Set to true to restart from the beginning
-const secondaryCalendarsIds = []
+const secondaryCalendarsIds = [];
+
+const excludedOUs = [
+  "/2FA Exception/Login Only/Terminated"
+];
 
 function readAndCancelEvents() {
-  const allCalendars = getAllCalendars(); 
+  const allCalendars = getAllCalendars();
   const companyDomains = extractUniqueDomains(allCalendars);
   console.log(`Company domains: ${companyDomains.join(', ')}`);
 
@@ -30,10 +34,14 @@ function readAndCancelEvents() {
   let processedCount = 0;
 
   for (const userEmail of remainingCalendars) {
-    processUserCalendar(userEmail, companyDomains);
-    scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
-    processedCount++;
-    console.log(`Processed ${processedCount} of ${totalUsers} calendars. Remaining: ${totalUsers - processedCount}`);
+    try {
+      processUserCalendar(userEmail, companyDomains);
+      scriptProps.setProperty('LAST_PROCESSED_EMAIL', userEmail);
+      processedCount++;
+      console.log(`Processed ${processedCount} of ${totalUsers} calendars. Remaining: ${totalUsers - processedCount}`);
+    } catch (error) {
+      console.error(`Error processing calendar for ${userEmail}: ${error.message}`);
+    }
   }
 }
 
@@ -51,34 +59,34 @@ function processUserCalendar(userEmail, companyDomains) {
     events
       .filter(event => !event.recurringEventId) // Process only master events
       .forEach(event => {
-        const scenario = classifyEvent(event, companyDomains);
+          const scenario = classifyEvent(event, companyDomains);
 
-        if (
-          scenario === "Internal/Recurring" ||
-          scenario === "Internal/One-Time" ||
-          scenario === "Exempted/AsAuthor/Recurring" ||
-          scenario === "Exempted/AsAuthor/One-Time" ||
-          scenario === "Exempted/AsAttendee/Recurring" ||
-          scenario === "Exempted/AsAttendee/One-Time"
-        ) {
-          if (shouldCancelEvent(event, companyDomains)) {
-            if (scenario.includes("Recurring")) {
-              const eventStartDate = new Date(event.start.dateTime || event.start.date);
+          if (
+            scenario === "Internal/Recurring" ||
+            scenario === "Internal/One-Time" ||
+            scenario === "Exempted/AsAuthor/Recurring" ||
+            scenario === "Exempted/AsAuthor/One-Time" ||
+            scenario === "Exempted/AsAttendee/Recurring" ||
+            scenario === "Exempted/AsAttendee/One-Time"
+          ) {
+            if (shouldCancelEvent(event, companyDomains)) {
+              if (scenario.includes("Recurring")) {
+                const eventStartDate = new Date(event.start.dateTime || event.start.date);
 
-              if (eventStartDate >= fromDate) {
-                removeEvent(event, userEmail, scenario);
+                if (eventStartDate >= fromDate) {
+                  removeEvent(event, userEmail, scenario);
+                } else {
+                  updateRecurringEvent(event, userEmail, scenario);
+                }
               } else {
-                updateRecurringEvent(event, userEmail, scenario);
+                removeEvent(event, userEmail, scenario);
               }
             } else {
-              removeEvent(event, userEmail, scenario);
+              logEventDetails(`Preserving event`, event, scenario);
             }
           } else {
             logEventDetails(`Preserving event`, event, scenario);
           }
-        } else {
-          logEventDetails(`Preserving event`, event, scenario);
-        }
       });
   } catch (error) {
     console.error(`Failed to process calendar for ${userEmail}: ${error.message}`);
@@ -90,7 +98,16 @@ function getAllUsers() {
   let pageToken;
   do {
     const response = AdminDirectory.Users.list({ customer: 'my_customer', maxResults: 500, pageToken });
-    users.push(...(response.users || []).map(user => user.primaryEmail));
+
+    response.users?.forEach(user => {
+      if (!excludedOUs.includes(user.orgUnitPath)) {
+        users.push(user.primaryEmail);
+        console.log(`Including user ${user.primaryEmail} from OU: ${user.orgUnitPath}`);
+      } else {
+        console.log(`Skipping user ${user.primaryEmail} from excluded OU: ${user.orgUnitPath}`);
+      }
+    });
+
     pageToken = response.nextPageToken;
   } while (pageToken);
   return users;
