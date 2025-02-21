@@ -3,7 +3,7 @@ const exemptedUsers = []; // Add emails for exempted users
 const testRun = false; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
 const restartFromBeginning = true; // Set to true to restart from the beginning
-const secondaryCalendarsIds = ["c_3391b7096bfa79195e3fbf5357b45d19ae82c258785e1e477cfd6255215af14a@group.calendar.google.com"];
+const secondaryCalendarsIds = []; // Add ids of secondary calendars to process
 
 const excludedOUs = [
   //"/2FA Exception/Login Only/Terminated"
