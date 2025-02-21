@@ -18,7 +18,8 @@ The script is designed to support a **relatively large number of users** and to 
 To meet the company’s objectives while maintaining data integrity, the following key requirements must be addressed:
 
 #### Preservation of External Meetings
-- Meetings involving **external participants** (emails outside the company domain) must remain untouched.
+- Meetings involving **external participants** (emails outside the company domains) must remain untouched.
+- The script supports both primary and additional corporate domains for determining internal vs external participants.
 
 #### Preservation of Personal and Out of Office Events
 - Personal meetings involving **no participants** (only the author) or **out of office events** must remain untouched.
@@ -70,14 +71,32 @@ To run this script, you need the following:
 1. Go to [Google Apps Script Editor](https://script.google.com/).
 2. Create a new project.
 3. Add the `appsscript.json` and `CalendarCleanup.js` files provided in this repository to the editor.
+4. Configure the script settings at the top of `CalendarCleanup.js`:
+   ```javascript
+   const fromDate = new Date(2025, 1, 17); // Set your target date
+   const exemptedUsers = []; // Add emails for exempted users
+   const additionalCorporateDomains = []; // Add alias domains like ['alias1.com', 'alias2.com']
+   const testRun = true; // Start with true for testing
+   const preserveEventsWithExemptedAttendees = false;
+   const restartFromBeginning = false;
+   const secondaryCalendarsIds = []; // Add secondary calendar IDs if needed
+   const excludedOUs = []; // Add excluded organizational units
+   ```
 
-#### **Step 3: Test the Script**
+#### **Step 3: Configure Domain Settings**
+1. Set your primary domain - this will be automatically detected from users' email addresses
+2. Add any additional corporate domains to `additionalCorporateDomains` if your organization:
+   - Uses email aliases on different domains
+   - Has recently migrated from one domain to another
+   - Uses multiple domains for internal communication
+
+#### **Step 4: Test the Script**
 1. Set the `testRun` variable to `true` in the script.
 2. **Add the list of exempted emails** to the `exemptedUsers` list.
 3. Run the script to log actions without applying changes.
 4. Verify the logs for expected classifications and actions.
 
-#### **Step 4: Apply Changes**
+#### **Step 5: Apply Changes**
 1. Once satisfied with the test results, set the `testRun` variable to `false`.
 2. Execute the script to apply changes.
 
@@ -85,6 +104,7 @@ To run this script, you need the following:
 
 - **Test Mode**: Always set `testRun` to `true` during initial testing to ensure actions are logged without changes.
 - **Detailed Logs**: Use logs to identify and classify events before applying changes.
+- **Domain Configuration**: Ensure all corporate domains (primary and aliases) are properly configured.
 
 ## Troubleshooting
 
