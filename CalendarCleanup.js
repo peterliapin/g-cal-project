@@ -1,8 +1,8 @@
-const fromDate = new Date(2025, 1, 17); // February 10, 2025
+const fromDate = new Date(2025, 1, 17); // February 17, 2025
 const exemptedUsers = []; // Add emails for exempted users
-const testRun = false; // Set to true for testing without applying changes
+const testRun = true; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
-const restartFromBeginning = true; // Set to true to restart from the beginning
+const restartFromBeginning = false; // Set to true to restart from the beginning
 const secondaryCalendarsIds = []; // Add ids of secondary calendars to process
 const additionalCorporateDomains = []; // Add additional corporate domains like ['alias1.com', 'alias2.com']
 
