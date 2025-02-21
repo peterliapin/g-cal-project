@@ -4,14 +4,12 @@ const testRun = false; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
 const restartFromBeginning = true; // Set to true to restart from the beginning
 const secondaryCalendarsIds = []; // Add ids of secondary calendars to process
+const additionalCorporateDomains = []; // Add additional corporate domains like ['alias1.com', 'alias2.com']
 
-const excludedOUs = [
-  //"/2FA Exception/Login Only/Terminated"
-];
+const excludedOUs = []; // Add OUs to exclude like ["/2FA Exception/Login Only/Terminated"]
 
 function readAndCancelEvents() {
   const allCalendars = getAllCalendars();
-  //const allCalendars = ["senior-manager1@liapin.space"]
   const companyDomains = extractUniqueDomains(allCalendars);
   console.log(`Company domains: ${companyDomains.join(', ')}`);
 
@@ -145,6 +143,7 @@ function extractUniqueDomains(users) {
   let userDomains = users.map(email => email.split('@')[1].toLowerCase());
   userDomains.push("resource.calendar.google.com");
   userDomains.push("group.calendar.google.com");
+  userDomains.push(...additionalCorporateDomains);
   return [...new Set(userDomains)];
 }
 
