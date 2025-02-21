@@ -297,7 +297,8 @@ function logEventDetails(prefix, event, scenario, postfix = '') {
     Summary: ${event.summary}
     Start: ${event.start?.dateTime || event.start?.date}
     End: ${event.end?.dateTime || event.end?.date}
-    Author/Creator: ${event.organizer?.email || event.creator?.email}
+    Organizer: ${event.organizer?.email}
+    Creator: ${event.creator?.email}
     Attendees: ${event.attendees?.map(a => a.email).join(', ') || 'None'}
     ${postfix}`);
 }
