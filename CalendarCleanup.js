@@ -167,10 +167,21 @@ function fetchCalendarEvents(calendarId) {
  * - Personal (no other attendees or only organizer as attendee)
  */
 function classifyEvent(event, companyDomains) {
-  const organizerEmail = event.organizer?.email || event.creator?.email;
+  const organizerEmail = event.organizer?.email;
+  const creatorEmail = event.creator?.email;
   const isRecurring = !!event.recurrence;
 
-// Check if there's any attendee outside our domains
+  // Check if either organizer or creator is external
+  const isOrganizerExternal = organizerEmail && 
+    !companyDomains.some(domain => organizerEmail.toLowerCase().endsWith(domain));
+  const isCreatorExternal = creatorEmail && 
+    !companyDomains.some(domain => creatorEmail.toLowerCase().endsWith(domain));
+
+  if (isOrganizerExternal || isCreatorExternal) {
+    return isRecurring ? "External/Recurring" : "External/One-Time";
+  }
+
+  // Check if there's any attendee outside our domains
   const isExternal = event.attendees?.some(attendee =>
     !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
@@ -179,17 +190,18 @@ function classifyEvent(event, companyDomains) {
     return isRecurring ? "External/Recurring" : "External/One-Time";
   }
 
-  // Check for exempted user scenarios when the organizer is exempted
-  if (exemptedUsers.includes(organizerEmail)) {
+  // Check for exempted user scenarios when either organizer or creator is exempted
+  if ((organizerEmail && exemptedUsers.includes(organizerEmail)) || 
+      (creatorEmail && exemptedUsers.includes(creatorEmail))) {
     return isRecurring ? "Exempted/AsAuthor/Recurring" : "Exempted/AsAuthor/One-Time";
   }
 
-  // Check for exempted user scenarios when any attendee is exempted
+// Check for exempted user scenarios when any attendee is exempted
   if (event.attendees?.some(attendee => exemptedUsers.includes(attendee.email))) {
     return isRecurring ? "Exempted/AsAttendee/Recurring" : "Exempted/AsAttendee/One-Time";
   }
 
-  // If no attendees (other than possibly the organizer), treat as personal
+// If no attendees (other than possibly the organizer), treat as personal
   if (!event.attendees || event.attendees.every(att => att.email === organizerEmail)) {
     return "Personal";
   }
@@ -202,14 +214,17 @@ function classifyEvent(event, companyDomains) {
  * applying our extra rule about exempted users in the attendee list.
  */
 function shouldCancelEvent(event, companyDomains) {
-  // Basic checks for personal or external events
-  const organizerEmail = event.organizer?.email || event.creator?.email;
+  const organizerEmail = event.organizer?.email;
+  const creatorEmail = event.creator?.email;
 
-  const isPersonal =
-    !event.attendees ||
-    event.attendees.every(att => att.email === organizerEmail);
+  const isPersonal = !event.attendees || (
+    event.attendees.every(att => 
+      (organizerEmail && att.email === organizerEmail) || 
+      (creatorEmail && att.email === creatorEmail)
+    )
+  );
 
-    // If external attendees exist, preserve
+  // If external attendees exist, preserve
   const isExternal = event.attendees?.some(attendee =>
     !companyDomains.some(domain => attendee.email.toLowerCase().endsWith(domain))
   );
@@ -218,8 +233,9 @@ function shouldCancelEvent(event, companyDomains) {
     return false;
   }
 
-// If the event is authored by an exempted user, always preserve
-  if (exemptedUsers.includes(organizerEmail)) {
+// If either organizer or creator is exempted, preserve the event
+  if ((organizerEmail && exemptedUsers.includes(organizerEmail)) || 
+      (creatorEmail && exemptedUsers.includes(creatorEmail))) {
     return false;
   }
 
