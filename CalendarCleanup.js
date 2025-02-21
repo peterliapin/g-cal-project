@@ -1,16 +1,17 @@
-const fromDate = new Date(2025, 1, 17); // February 17, 2025
+const fromDate = new Date(2025, 1, 17); // February 10, 2025
 const exemptedUsers = []; // Add emails for exempted users
-const testRun = true; // Set to true for testing without applying changes
+const testRun = false; // Set to true for testing without applying changes
 const preserveEventsWithExemptedAttendees = false; // Preserve events with exempted attendees if true
-const restartFromBeginning = false; // Set to true to restart from the beginning
-const secondaryCalendarsIds = [];
+const restartFromBeginning = true; // Set to true to restart from the beginning
+const secondaryCalendarsIds = ["c_3391b7096bfa79195e3fbf5357b45d19ae82c258785e1e477cfd6255215af14a@group.calendar.google.com"];
 
 const excludedOUs = [
-  "/2FA Exception/Login Only/Terminated"
+  //"/2FA Exception/Login Only/Terminated"
 ];
 
 function readAndCancelEvents() {
   const allCalendars = getAllCalendars();
+  //const allCalendars = ["senior-manager1@liapin.space"]
   const companyDomains = extractUniqueDomains(allCalendars);
   console.log(`Company domains: ${companyDomains.join(', ')}`);
 
@@ -53,7 +54,12 @@ function processUserCalendar(userEmail, companyDomains) {
 
   console.info(`Processing calendar for: ${userEmail}`);
   try {
-    const events = fetchCalendarEvents(userEmail);
+    const events = fetchCalendarEvents(userEmail).filter(event => {
+      const organizerEmail = event.organizer?.email;
+      const creatorEmail = event.creator?.email;
+      return (organizerEmail === userEmail) || (creatorEmail === userEmail);
+    });
+
     console.log(`Found ${events.length} events in ${userEmail}'s calendar.`);
 
     events
